@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>counter_deep · Widget 树图</title>
+<style>
+  :root{
+    --bg:#eef2f7;
+    --card:#ffffff;
+    --ink:#0f172a;
+    --muted:#64748b;
+    --line:#c7d2e0;
+    --sl-bg:#e8f1ff; --sl-bd:#3b82f6; --sl-tx:#1d4ed8;
+    --sf-bg:#fff3e0; --sf-bd:#f59e0b; --sf-tx:#b45309;
+    --st-bg:#f5ebfc; --st-bd:#a855f7; --st-tx:#7e22ce;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; padding:40px 24px 64px;
+    background:radial-gradient(1200px 600px at 50% -10%, #ffffff 0%, var(--bg) 60%);
+    color:var(--ink);
+    font-family:"Segoe UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+  }
+  .wrap{ max-width:900px; margin:0 auto; }
+  header{
+    background:linear-gradient(135deg,#0f766e 0%,#0d9488 55%,#14b8a6 100%);
+    color:#fff; border-radius:18px; padding:26px 30px;
+    box-shadow:0 12px 30px rgba(13,148,136,.28);
+  }
+  header h1{ margin:0 0 6px; font-size:24px; letter-spacing:.3px; }
+  header p{ margin:0; opacity:.92; font-size:14px; }
+  .legend{
+    display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center;
+    margin:22px 0 8px; padding:14px 18px; background:var(--card);
+    border-radius:14px; box-shadow:0 2px 10px rgba(15,23,42,.06);
+    font-size:13px; color:var(--muted);
+  }
+  .chip{ display:inline-flex; align-items:center; gap:7px; font-weight:600; }
+  .dot{ width:14px; height:14px; border-radius:4px; border:2px solid; }
+  .dot.sl{ background:var(--sl-bg); border-color:var(--sl-bd); }
+  .dot.sf{ background:var(--sf-bg); border-color:var(--sf-bd); }
+  .dot.st{ background:var(--st-bg); border-color:var(--st-bd); border-style:dashed; }
+  .treecard{
+    margin-top:18px; padding:26px 24px; background:var(--card);
+    border-radius:18px; box-shadow:0 3px 14px rgba(15,23,42,.07);
+    overflow-x:auto;
+  }
+  .tree, .tree ul{ list-style:none; margin:0; padding:0; }
+  .tree ul{
+    position:relative; margin-left:12px; padding-left:26px;
+    border-left:2px solid var(--line);
+  }
+  .tree li{ position:relative; padding:6px 0; }
+  .tree ul > li::before{
+    content:''; position:absolute; left:-26px; top:30px;
+    width:26px; height:2px; background:var(--line);
+  }
+  /* 去掉最后一个分支下方多余的悬垂竖线 */
+  .tree ul > li:last-child::after{
+    content:''; position:absolute; left:-27px; top:32px; bottom:0;
+    width:4px; background:var(--card);
+  }
+  .node{
+    display:inline-flex; flex-direction:column; justify-content:center; gap:2px;
+    height:48px; padding:6px 14px; border-radius:10px;
+    border:2px solid var(--line); border-left-width:6px;
+    background:#fff; box-shadow:0 1px 3px rgba(15,23,42,.08); white-space:nowrap;
+  }
+  .node .name{ font-weight:700; font-size:14px; line-height:19px; }
+  .node .meta{ font-size:11px; line-height:14px; color:var(--muted); }
+  .node.stateless{ background:var(--sl-bg); border-color:var(--sl-bd); }
+  .node.stateless .name{ color:var(--sl-tx); }
+  .node.stateful{ background:var(--sf-bg); border-color:var(--sf-bd); }
+  .node.stateful .name{ color:var(--sf-tx); }
+  .node.state{ background:var(--st-bg); border-color:var(--st-bd); border-style:dashed; border-left-width:6px; }
+  .node.state .name{ color:var(--st-tx); }
+  .node.root{ border-left-width:6px; }
+  .notes{
+    margin-top:22px; display:grid; gap:14px;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  }
+  .note{
+    background:var(--card); border-radius:14px; padding:16px 18px;
+    box-shadow:0 2px 10px rgba(15,23,42,.06); border-top:3px solid #0d9488;
+  }
+  .note h3{ margin:0 0 6px; font-size:13.5px; color:#0f766e; }
+  .note p{ margin:0; font-size:12.5px; line-height:1.7; color:#334155; }
+  .note code{
+    background:#0f172a0d; padding:1px 5px; border-radius:5px;
+    font-family:Consolas,"Cascadia Mono",monospace; font-size:12px;
+  }
+  .summary{
+    margin-top:20px; padding:14px 18px; border-radius:14px;
+    background:#0f766e12; border:1px dashed #0d948855;
+    font-size:13px; color:#115e59;
+  }
+  .summary b{ color:#0f766e; }
+  footer{ margin-top:26px; text-align:center; font-size:12px; color:var(--muted); }
+  @media print{
+    body{ background:#fff; padding:0; }
+    header, .legend, .treecard, .note, .summary{ box-shadow:none; }
+    .treecard{ border:1px solid #e2e8f0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>counter_deep · Widget 树</h1>
+    <p>Flutter 实践指南五 · 课堂案例复现 —— 完整层级 + 两类 Widget 标注</p>
+  </header>
+
+  <div class="legend">
+    <span class="chip"><span class="dot sl"></span>StatelessWidget（无内部可变状态）</span>
+    <span class="chip"><span class="dot sf"></span>StatefulWidget（持有 State）</span>
+    <span class="chip"><span class="dot st"></span>State 对象（不是 Widget，虚线框）</span>
+    <span class="chip">连线 = 父子嵌套关系，从上往下读作“父 Widget 的孩子”</span>
+  </div>
+
+  <div class="treecard">
+    <ul class="tree">
+      <li>
+        <div class="node stateless root"><span class="name">CounterDeepApp</span><span class="meta">StatelessWidget · runApp() 挂载的应用根</span></div>
+        <ul>
+          <li>
+            <div class="node stateful"><span class="name">MaterialApp</span><span class="meta">StatefulWidget · title / theme / home</span></div>
+            <ul>
+              <li>
+                <div class="node stateful"><span class="name">CounterPage</span><span class="meta">StatefulWidget · createState() → _CounterPageState</span></div>
+                <ul>
+                  <li>
+                    <div class="node state"><span class="name">_CounterPageState</span><span class="meta">State（非 Widget）· 持有 int _count / int _step</span></div>
+                    <ul>
+                      <li>
+                        <div class="node stateful"><span class="name">Scaffold</span><span class="meta">StatefulWidget · appBar / body / floatingActionButton</span></div>
+                        <ul>
+
+                          <!-- AppBar 分支 -->
+                          <li>
+                            <div class="node stateful"><span class="name">AppBar</span><span class="meta">StatefulWidget · title + flexibleSpace</span></div>
+                            <ul>
+                              <li>
+                                <div class="node stateless"><span class="name">Stack</span><span class="meta">StatelessWidget · fit: StackFit.expand</span></div>
+                                <ul>
+                                  <li><div class="node stateless"><span class="name">Image</span><span class="meta">StatelessWidget · Image.asset('assets/images/logo.jpg')</span></div></li>
+                                  <li><div class="node stateless"><span class="name">DecoratedBox</span><span class="meta">StatelessWidget · 黑色渐变遮罩（保证标题可读）</span></div></li>
+                                </ul>
+                              </li>
+                            </ul>
+                          </li>
+
+                          <!-- body 分支 -->
+                          <li>
+                            <div class="node stateless"><span class="name">Center</span><span class="meta">StatelessWidget · body: Center(...)</span></div>
+                            <ul>
+                              <li>
+                                <div class="node stateless"><span class="name">Column</span><span class="meta">StatelessWidget · mainAxisAlignment: center</span></div>
+                                <ul>
+                                  <li>
+                                    <div class="node stateless"><span class="name">CountDisplay</span><span class="meta">StatelessWidget（自建）· 入参 count + style</span></div>
+                                    <ul>
+                                      <li><div class="node stateless"><span class="name">Text</span><span class="meta">StatelessWidget · '$_count' · 取 colorScheme.primary</span></div></li>
+                                    </ul>
+                                  </li>
+                                  <li><div class="node stateless"><span class="name">SizedBox</span><span class="meta">StatelessWidget · height: 16</span></div></li>
+                                  <li><div class="node stateless"><span class="name">Text</span><span class="meta">StatelessWidget · '当前步长：$_step' · 取 textTheme.titleMedium</span></div></li>
+                                  <li><div class="node stateless"><span class="name">SizedBox</span><span class="meta">StatelessWidget · height: 12</span></div></li>
+                                  <li>
+                                    <div class="node stateless"><span class="name">StepSelector</span><span class="meta">StatelessWidget（自建）· step + onSelected 回调</span></div>
+                                    <ul>
+                                      <li>
+                                        <div class="node stateful"><span class="name">PopupMenuButton&lt;int&gt;</span><span class="meta">StatefulWidget · 点击弹出步长 1 / 2 / 5</span></div>
+                                        <ul>
+                                          <li>
+                                            <div class="node stateless"><span class="name">Chip</span><span class="meta">StatelessWidget · 子项</span></div>
+                                            <ul>
+                                              <li><div class="node stateless"><span class="name">Icon</span><span class="meta">StatelessWidget · Icons.speed</span></div></li>
+                                              <li><div class="node stateless"><span class="name">Text</span><span class="meta">StatelessWidget · '步长：$step（点击选择 1/2/5）'</span></div></li>
+                                            </ul>
+                                          </li>
+                                        </ul>
+                                      </li>
+                                    </ul>
+                                  </li>
+                                  <li><div class="node stateless"><span class="name">SizedBox</span><span class="meta">StatelessWidget · height: 24</span></div></li>
+                                  <li>
+                                    <div class="node stateless"><span class="name">TextButton</span><span class="meta">StatelessWidget · TextButton.icon('重置')</span></div>
+                                    <ul>
+                                      <li><div class="node stateless"><span class="name">Icon</span><span class="meta">StatelessWidget · Icons.refresh</span></div></li>
+                                      <li><div class="node stateless"><span class="name">Text</span><span class="meta">StatelessWidget · '重置'</span></div></li>
+                                    </ul>
+                                  </li>
+                                </ul>
+                              </li>
+                            </ul>
+                          </li>
+
+                          <!-- FAB 分支 -->
+                          <li>
+                            <div class="node stateful"><span class="name">FloatingActionButton.extended</span><span class="meta">StatefulWidget · onPressed: _addStep</span></div>
+                            <ul>
+                              <li><div class="node stateless"><span class="name">Icon</span><span class="meta">StatelessWidget · Icons.add</span></div></li>
+                              <li><div class="node stateless"><span class="name">Text</span><span class="meta">StatelessWidget · '+$_step'</span></div></li>
+                            </ul>
+                          </li>
+
+                        </ul>
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </li>
+    </ul>
+  </div>
+
+  <div class="summary">
+    本页共 <b>27</b> 个 Widget 节点：<b>6</b> 个 StatefulWidget（MaterialApp、CounterPage、Scaffold、AppBar、PopupMenuButton、FloatingActionButton）
+    ＋ <b>21</b> 个 StatelessWidget；另有 <b>1</b> 个 State 对象 <code>_CounterPageState</code>（虚线框，不属于 Widget 树，但它的 <code>build()</code> 产出了 Scaffold 及以下整棵子树）。
+  </div>
+
+  <div class="notes">
+    <div class="note">
+      <h3>① 为什么是两类 Widget？</h3>
+      <p>页面会变，所以 <b>CounterPage</b> 必须是 StatefulWidget；它只负责“造 State”。真正可变的 <code>_count</code>、<code>_step</code> 住在 <code>_CounterPageState</code> 里。像 <b>CountDisplay</b>、<b>StepSelector</b>、<b>Text</b>、<b>Icon</b> 这种纯按入参渲染、自身不变的部分，一律用 StatelessWidget。</p>
+    </div>
+    <div class="note">
+      <h3>② 点 FAB 之后发生了什么（setState 链路）</h3>
+      <p>FloatingActionButton <code>onPressed</code> → <code>_addStep()</code> → <code>setState(() =&gt; _count += _step)</code> → 框架把该 State 标记为 <b>dirty</b> → 下一帧重新执行 <code>build()</code> → 变化的子树被替换，界面随之刷新。</p>
+    </div>
+    <div class="note">
+      <h3>③ Theme.of(context) 的两处取用</h3>
+      <p>一是 <code>Theme.of(context).colorScheme</code>，用主色 <code>colorScheme.primary</code> 画计数文字；二是 <code>Theme.of(context).textTheme</code>，用 <code>displayLarge / titleMedium</code> 定字号。种子色一改，这里全同步。</p>
+    </div>
+    <div class="note">
+      <h3>④ 资源为什么必须重启</h3>
+      <p>图片在 <code>pubspec.yaml</code> 的 <code>flutter.assets</code> 下声明为 <code>assets/images/</code>，代码用 <code>Image.asset</code> 读取并铺作 AppBar 背景。只改 pubspec 不重启，拿不到新资源清单，就会报 “Unable to load asset”。</p>
+    </div>
+    <div class="note">
+      <h3>⑤ 生命周期日志落点</h3>
+      <p>钩子顺序：<code>initState → didChangeDependencies → build（可多次）→ didUpdateWidget → dispose</code>。热重载（r）保留 State、只重跑 build；热重启（R）重置 State，会重新走 initState。</p>
+    </div>
+  </div>
+
+  <footer>counter_deep · Widget 树手绘整理 · 与 lib/main.dart 一一对应</footer>
+</div>
+</body>
+</html>
